@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafGuard AI - Plant Disease Detector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col font-sans">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/50 backdrop-blur py-4 px-8 flex justify-between items-center">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center font-bold text-slate-900">🍃</div>
+      <h1 class="text-xl font-bold tracking-wide">LeafGuard AI</h1>
+    </div>
+    </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-4xl w-full mx-auto p-6 flex flex-col gap-6">
+
+    <!-- Crop Selection Tabs -->
+    <div class="bg-slate-800/60 p-1.5 rounded-xl border border-slate-700 flex gap-2">
+      <button id="potatoTab" onclick="selectCrop('potato')" class="flex-1 py-3 rounded-lg font-semibold text-sm transition-all bg-green-600 text-white shadow-lg">
+        🥔 Potato Classifier (3 Classes)
+      </button>
+      <button id="tomatoTab" onclick="selectCrop('tomato')" class="flex-1 py-3 rounded-lg font-semibold text-sm transition-all text-slate-400 hover:text-white">
+        🍅 Tomato Classifier (10 Classes)
+      </button>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      
+      <!-- Upload Box -->
+      <div class="bg-slate-800/40 border-2 border-dashed border-slate-700 hover:border-green-500/50 rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all min-h-[320px] relative">
+        <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+        
+        <div id="uploadPrompt" class="flex flex-col items-center">
+          <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 text-2xl">📸</div>
+          <p class="font-medium text-slate-200">Drag & Drop or Click to Upload Leaf Image</p>
+          <p class="text-xs text-slate-500 mt-1">Supports JPG, PNG (Auto-Resized)</p>
+        </div>
+
+        <img id="imagePreview" class="hidden w-full h-60 object-cover rounded-xl border border-slate-700">
+      </div>
+
+      <!-- Result Card -->
+      <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
+        <div>
+          <h2 class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3">Diagnostic Analysis</h2>
+          
+          <div id="emptyResult" class="text-slate-500 text-sm py-12 text-center">
+            Upload an image and click analyze to run model inference.
+          </div>
+
+          <div id="resultContent" class="hidden space-y-4">
+            <div>
+              <span id="statusBadge" class="text-xs px-2.5 py-1 rounded-full font-semibold border">--</span>
+              <h3 id="predictedClass" class="text-xl font-bold mt-2 text-white">--</h3>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-400">Model Confidence</span>
+                <span id="confidenceText" class="font-bold text-green-400">0%</span>
+              </div>
+              <div class="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                <div id="confidenceBar" class="bg-green-500 h-full w-0 transition-all duration-500"></div>
+              </div>
+            </div>
+
+            <div id="recommendationBox" class="bg-slate-900/60 p-3 rounded-lg border border-slate-700 text-xs text-slate-300">
+              <strong class="text-green-400 block mb-1">Action Recommendation:</strong>
+              <p id="recommendationText">--</p>
+            </div>
+          </div>
+        </div>
+
+        <button id="analyzeBtn" onclick="analyzeLeaf()" disabled class="w-full mt-4 bg-green-600 hover:bg-green-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
+          Run Leaf Inference
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    let selectedCrop = 'potato';
+    let selectedFile = null;
+
+    function selectCrop(crop) {
+      selectedCrop = crop;
+      const pTab = document.getElementById('potatoTab');
+      const tTab = document.getElementById('tomatoTab');
+
+      if (crop === 'potato') {
+        pTab.className = "flex-1 py-3 rounded-lg font-semibold text-sm transition-all bg-green-600 text-white shadow-lg";
+        tTab.className = "flex-1 py-3 rounded-lg font-semibold text-sm transition-all text-slate-400 hover:text-white";
+      } else {
+        tTab.className = "flex-1 py-3 rounded-lg font-semibold text-sm transition-all bg-green-600 text-white shadow-lg";
+        pTab.className = "flex-1 py-3 rounded-lg font-semibold text-sm transition-all text-slate-400 hover:text-white";
+      }
+    }
+
+    function previewImage(event) {
+      const file = event.target.files[0];
+      if (file) {
+        selectedFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('uploadPrompt').classList.add('hidden');
+          const img = document.getElementById('imagePreview');
+          img.src = e.target.result;
+          img.classList.remove('hidden');
+          document.getElementById('analyzeBtn').disabled = false;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    async function analyzeLeaf() {
+      if (!selectedFile) return;
+
+      const btn = document.getElementById('analyzeBtn');
+      btn.innerText = "Analyzing Leaf...";
+      btn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/predict/${selectedCrop}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        displayResult(data);
+      } catch (error) {
+        alert("Error connecting to backend API. Ensure FastAPI server is running.");
+      } finally {
+        btn.innerText = "Run Leaf Inference";
+        btn.disabled = false;
+      }
+    }
+
+    function displayResult(data) {
+      document.getElementById('emptyResult').classList.add('hidden');
+      document.getElementById('resultContent').classList.remove('hidden');
+
+      document.getElementById('predictedClass').innerText = data.predicted_class;
+      document.getElementById('confidenceText').innerText = `${data.confidence}%`;
+      document.getElementById('confidenceBar').style.width = `${data.confidence}%`;
+
+      const badge = document.getElementById('statusBadge');
+      const rec = document.getElementById('recommendationText');
+
+      if (data.predicted_class.toLowerCase().includes('healthy')) {
+        badge.innerText = "Healthy Leaf";
+        badge.className = "text-xs px-2.5 py-1 rounded-full font-semibold border bg-green-500/10 text-green-400 border-green-500/20";
+        rec.innerText = "No infection detected. Maintain standard watering and soil health routines.";
+      } else {
+        badge.innerText = "Infection Detected";
+        badge.className = "text-xs px-2.5 py-1 rounded-full font-semibold border bg-red-500/10 text-red-400 border-red-500/20";
+        rec.innerText = "Isolate infected plant, apply recommended organic fungicide, and avoid overhead watering.";
+      }
+    }
+  </script>
+</body>
+</html>
